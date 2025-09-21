@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>isiZulu Corpus</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .lang-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        .lang-buttons button,
+        button {
+            background-color: #e67e22; /* tiger orange */
+            border: none;
+            padding: 10px 16px;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .lang-buttons button:hover,
+        button:hover {
+            background-color: #d35400; /* darker tiger orange */
+        }
+        .logout {
+            color: white;
+            text-decoration: none;
+            margin-left: 15px;
+        }
+        main {
+            padding: 20px;
+            max-width: 900px;
+            margin: auto;
+        }
+        input[type="text"], textarea, select {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0 15px 0;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        .section {
+            background-color: white;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        }
+        h2 {
+            margin-top: 0;
+        }
+        .result {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        .result:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="user-info">
+            <span>Welcome, {{ username }}!</span>
+            <a href="{{ url_for('logout') }}" class="logout">Logout</a>
+        </div>
+        <div class="lang-buttons">
+            <button onclick="setLanguage('English')">English</button>
+            <button onclick="setLanguage('isiZulu')">isiZulu</button>
+            <button onclick="setLanguage('isiXhosa')">isiXhosa</button>
+            <button onclick="setLanguage('siSwati')">siSwati</button>
+        </div>
+    </header>
+    <main>
+        <!-- SEARCH SECTION -->
+        <div class="section">
+            <h2>Search Corpus</h2>
+            <input type="text" id="searchQuery" placeholder="Enter word or phrase...">
+            <button onclick="searchCorpus()">Search</button>
+            <div id="searchResults"></div>
+
+            <!-- FREQUENCY & PAIRS -->
+            <div id="freqPairsResults" style="margin-top:15px;"></div>
+        </div>
+
+        <!-- ADD ENTRY SECTION -->
+        <div class="section">
+            <h2>Add New Entry</h2>
+            <input type="text" id="isiZulu" placeholder="isiZulu">
+            <input type="text" id="English" placeholder="English">
+            <input type="text" id="isiXhosa" placeholder="isiXhosa (optional)">
+            <input type="text" id="siSwati" placeholder="siSwati (optional)">
+            <textarea id="Context" placeholder="Context"></textarea>
+            <input type="text" id="Page" placeholder="Page (optional)">
+            <button onclick="addEntry()">Add Entry</button>
+            <div id="addMessage"></div>
+        </div>
+
+        <!-- UPLOAD SECTION -->
+        <div class="section">
+            <h2>Upload Document</h2>
+            <input type="file" id="uploadFile">
+            <button onclick="uploadFile()">Upload</button>
+            <div id="uploadMessage"></div>
+        </div>
+    </main>
+
+    <script>
+        let selectedLanguage = "English";
+
+        function setLanguage(lang) {
+            selectedLanguage = lang;
+            alert("Language set to " + lang);
+        }
+
+        async function searchCorpus() {
+            const query = document.getElementById('searchQuery').value.trim();
+            const res = await fetch(`/search?q=${query}`);
+            const data = await res.json();
+            let html = '';
+
+            if (data.results.length > 0) {
+                const r = data.results[0]; // show first result
+                html += `<div class="result">
+                    <strong>${selectedLanguage}:</strong> ${r[selectedLanguage] || '-'}<br>
+                    <strong>Context:</strong> ${r.Context || '-'}<br>
+                    <strong>Page:</strong> ${r.Page || '-'}<br>
+                    ${r.file_path ? `<a href="/${r.file_path}" target="_blank">View File</a>` : ''}
+                </div>`;
+            } else {
+                html = `<p>No results found.</p>`;
+                if (data.did_you_mean.length > 0) {
+                    html += `<p>Did you mean: ${data.did_you_mean.join(', ')}?</p>`;
+                }
+            }
+            document.getElementById('searchResults').innerHTML = html;
+
+            // Display frequency and common pairs
+            let freqHtml = `<p><strong>Frequency of "${data.query}":</strong> ${data.frequency}</p>
+                            <p><strong>Usage:</strong> ${data.usage_percent}% of total words (${data.total_words})</p>
+                            <p><strong>Common Pairs:</strong></p>`;
+            if (data.common_pairs && data.common_pairs.length > 0) {
+                freqHtml += '<ul>';
+                data.common_pairs.forEach(p => {
+                    freqHtml += `<li>${p.pair} — ${p.count}</li>`;
+                });
+                freqHtml += '</ul>';
+            } else {
+                freqHtml += '<p>No common pairs found.</p>';
+            }
+            document.getElementById('freqPairsResults').innerHTML = freqHtml;
+        }
+
+        async function addEntry() {
+            const data = {
+                isiZulu: document.getElementById('isiZulu').value.trim(),
+                English: document.getElementById('English').value.trim(),
+                isiXhosa: document.getElementById('isiXhosa').value.trim(),
+                siSwati: document.getElementById('siSwati').value.trim(),
+                Context: document.getElementById('Context').value.trim(),
+                Page: document.getElementById('Page').value.trim()
+            };
+            const res = await fetch('/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            document.getElementById('addMessage').innerText = result.message;
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('uploadFile');
+            const file = fileInput.files[0];
+            if (!file) return alert('Select a file first');
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/upload', { method: 'POST', body: formData });
+            const result = await res.json();
+            document.getElementById('uploadMessage').innerText = result.message;
+        }
+    </script>
+</body>
+</html>
